@@ -1,0 +1,6 @@
+[submodule "threeal-bot"]
+	path = threeal-bot
+	url = https://github.com/threeal/threeal-bot/
+[submodule "threeal-bot-nlu"]
+	path = threeal-bot-nlu
+	url = https://github.com/threeal/threeal-bot-nlu/
