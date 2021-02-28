@@ -1,17 +1,15 @@
 FROM threeal/threeal-bot:latest
 
-COPY . /app/
+# Install dependencies
+RUN apt-get update && apt-get install -y supervisor git psmisc
+RUN yarn global add server-redirect
 
-# Setup Threeal Bot
-RUN cd /app/threeal-bot && yarn install
+# Setup Threeal bot modules
+COPY . /app
+RUN cd /app/threeal-bot && if [ -f 'package.json' ]; then yarn install; fi
+RUN cd /app/threeal-bot-nlu && if [ -f 'config.yml' ]; then rasa train; fi
 
-# Setup Threeal Bot NLU
-RUN cd /app/threeal-bot-nlu && rasa train
+# Copy Supervisor configuration
+RUN cp /app/supervisor.conf /etc/supervisor/conf.d/threeal-bot.conf
 
-# Install Supervisor
-RUN apt-get update && apt-get install -y supervisor
-
-# Copy Supervisord configuration
-COPY supervisor.conf /etc/supervisor/conf.d/threeal-bot.conf
-
-CMD /usr/bin/supervisord
+CMD bash /app/start.bash
