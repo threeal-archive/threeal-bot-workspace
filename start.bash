@@ -1,7 +1,19 @@
 #!/bin/bash
 
-# Temporary serve a redirector
-redirector -u https://discord.com/app -p $PORT &
+# Enabling job control
+set -m
+
+echo "starting a Supervisor daemon"
+supervisord &
+sleep 5
+
+restart_supervisor() {
+  echo "restarting a Supervisor daemon"
+  supervisorctl stop all || return $?
+  killall supervisord || return $?
+  supervisord &
+  sleep 5
+}
 
 # To update the repo contents
 check_repo () {
@@ -39,13 +51,24 @@ if [ ! -z "$BOT_REPO" ]; then
 fi
 
 # Prepare the NLU module
-if [ ! -z "$NLU_REPO" ]; then
-  if check_repo "$NLU_REPO" "$NLU_REPO_BRANCH" /app/nlu || exit $?; then
-    cd /app/nlu && rasa train || exit $?
+if [ -z "$NLU_URL" ]; then
+  export NLU_URL=http://localhost:6000
+  restart_supervisor || exit $?
+
+  if [ -z "$NLU_REPO" ]; then
+    if [ ! -z "$NLU_REPO" ]; then
+      if check_repo "$NLU_REPO" "$NLU_REPO_BRANCH" /app/nlu || exit $?; then
+        cd /app/nlu && rasa train || exit $?
+      fi
+    fi
   fi
+
+  echo "starting the nlu module"
+  supervisorctl start nlu || exit $?
 fi
 
-# kill the redirector
-killall node
+echo "starting the bot module"
+supervisorctl stop redirector || exit $?
+supervisorctl start bot || exit $?
 
-supervisord
+fg
