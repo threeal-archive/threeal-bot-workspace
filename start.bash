@@ -46,6 +46,7 @@ check_repo () {
 # Prepare the bot module
 if [ ! -z "$BOT_REPO" ]; then
   if check_repo "$BOT_REPO" "$BOT_REPO_BRANCH" /app/bot || exit $?; then
+    echo "installing bot dependencies"
     cd /app/bot && yarn install || exit $?
   fi
 fi
@@ -55,11 +56,10 @@ if [ -z "$NLU_URL" ]; then
   export NLU_URL=http://localhost:6000
   restart_supervisor || exit $?
 
-  if [ -z "$NLU_REPO" ]; then
-    if [ ! -z "$NLU_REPO" ]; then
-      if check_repo "$NLU_REPO" "$NLU_REPO_BRANCH" /app/nlu || exit $?; then
-        cd /app/nlu && rasa train || exit $?
-      fi
+  if [ ! -z "$NLU_REPO" ]; then
+    if check_repo "$NLU_REPO" "$NLU_REPO_BRANCH" /app/nlu || exit $?; then
+      echo "training nlu model"
+      cd /app/nlu && rasa train || exit $?
     fi
   fi
 
