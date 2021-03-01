@@ -1,7 +1,21 @@
 #!/bin/bash
 
-redirector -u https://discord.com/app -p $PORT &
+# Enabling job control
+set -m
 
+echo "starting a Supervisor daemon"
+supervisord &
+sleep 5
+
+restart_supervisor() {
+  echo "restarting a Supervisor daemon"
+  supervisorctl stop all || return $?
+  killall supervisord || return $?
+  supervisord &
+  sleep 5
+}
+
+# To update the repo contents
 check_repo () {
   REPO="$1"
   BRANCH="$2"
@@ -11,7 +25,7 @@ check_repo () {
 
   # Check if is the same repo
   if cd "$LOCATION" && [ -f '.git' ] \
-    && [ "$REPO" = "$(&& git remote get-url origin)" ]; then
+    && [ "$REPO" = "$(git remote get-url origin)" ]; then
     echo "pulling repo"
     git pull origin HEAD || return $?
   else
@@ -20,7 +34,7 @@ check_repo () {
 
     # Clone with or without specific branch
     if [ -z "$BRANCH" ]; then
-      echo "cloning on master"
+      echo "cloning"
       git clone "$REPO" "$LOCATION" || return $?
     else
       echo "cloning on $branch"
@@ -29,20 +43,32 @@ check_repo () {
   fi
 }
 
-# Prepare Threeal bot from specific repo and branch
+# Prepare the bot module
 if [ ! -z "$BOT_REPO" ]; then
-  if check_repo "$BOT_REPO" "$BOT_REPO_BRANCH" /app/threeal-bot || exit $?; then
-    cd /app/threeal-bot && yarn install || exit $?
+  if check_repo "$BOT_REPO" "$BOT_REPO_BRANCH" /app/bot || exit $?; then
+    cd /app/bot && yarn install || exit $?
   fi
 fi
 
-# Prepare Threeal bot NLU from specific repo and branch
-if [ ! -z "$NLU_REPO" ]; then
-  if check_repo "$NLU_REPO" "$NLU_REPO_BRANCH" /app/threeal-bot-nlu || exit $?; then
-    cd /app/threeal-bot-nlu && rasa train || exit $?
+# Prepare the NLU module
+if [ -z "$NLU_URL" ]; then
+  export NLU_URL=http://localhost:6000
+  restart_supervisor || exit $?
+
+  if [ -z "$NLU_REPO" ]; then
+    if [ ! -z "$NLU_REPO" ]; then
+      if check_repo "$NLU_REPO" "$NLU_REPO_BRANCH" /app/nlu || exit $?; then
+        cd /app/nlu && rasa train || exit $?
+      fi
+    fi
   fi
+
+  echo "starting the nlu module"
+  supervisorctl start nlu || exit $?
 fi
 
-killall node
+echo "starting the bot module"
+supervisorctl stop redirector || exit $?
+supervisorctl start bot || exit $?
 
-supervisord
+fg
